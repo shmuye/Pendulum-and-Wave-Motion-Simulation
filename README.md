@@ -61,6 +61,15 @@ The pendulum's motion is based on sine wave functions, and the wave simulation u
 
 ---
 
+### 📦 Installation
+
+1. Clone the repository:
+### - git clone https://github.com/shmuye/Pendulum-and-Wave-Motion-Simulation.git
+### - cd Pendulum-and-Wave-Motion-Simulation
+2,Install dependencies:
+### npm install
+
+
 
 
 ## Team Members
