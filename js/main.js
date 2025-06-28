@@ -1,24 +1,26 @@
-import * as THREE from 'three'
+import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { Pendulum } from "./pendulum.js"
 import { WaveSimulation } from "./wave.js"
+import { EffectsSystem } from "./effect.js"
 import { ControlsManager } from "./controls.js"
 
 /**
- * Main application class - orchestrates the entire simulation
+ * Enhanced Pendulum Wave Simulation
  */
 class PendulumWaveSimulation {
     constructor() {
-        // Core Three.js components
+        // Core components
         this.scene = null
         this.camera = null
         this.renderer = null
         this.controls = null
         this.clock = new THREE.Clock()
 
-        // Simulation components
+        // Simulation objects
         this.pendulums = []
         this.waveSimulation = null
+        this.effects = null
         this.controlsManager = null
 
         // Interaction state
@@ -28,34 +30,31 @@ class PendulumWaveSimulation {
         this.mouse = new THREE.Vector2()
         this.raycaster = new THREE.Raycaster()
 
-        // Animation
         this.animationId = null
 
         this.init()
     }
 
     /**
-     * Initialize the entire simulation
+     * Initialize the simulation
      */
     async init() {
         try {
-            await this.createScene()
+            this.createScene()
             this.createCamera()
             this.createRenderer()
             this.createControls()
             this.setupLighting()
             this.createPendulums()
-            this.createWaveSimulation()
+            this.createWave()
+            this.createEffects()
             this.setupEventListeners()
-            this.setupGUIControls()
+            this.setupControls()
 
-            // Hide loading screen
             this.hideLoadingScreen()
-
-            // Start animation loop
             this.animate()
 
-            console.log("Pendulum Wave Simulation initialized successfully")
+            console.log("Enhanced Pendulum Wave Simulation initialized successfully!")
         } catch (error) {
             console.error("Failed to initialize simulation:", error)
             this.showError("Failed to load simulation. Please refresh the page.")
@@ -63,35 +62,55 @@ class PendulumWaveSimulation {
     }
 
     /**
-     * Create the Three.js scene
+     * Create the scene with enhanced background
      */
-    async createScene() {
+    createScene() {
         this.scene = new THREE.Scene()
-        this.scene.background = new THREE.Color(0x87ceeb)
-        this.scene.fog = new THREE.Fog(0x87ceeb, 10, 50)
+
+        // Create gradient background
+        const canvas = document.createElement("canvas")
+        canvas.width = 512
+        canvas.height = 512
+        const ctx = canvas.getContext("2d")
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512)
+        gradient.addColorStop(0, "#1a1a2e")
+        gradient.addColorStop(0.5, "#16213e")
+        gradient.addColorStop(1, "#0f3460")
+
+        ctx.fillStyle = gradient
+        ctx.fillRect(0, 0, 512, 512)
+
+        const texture = new THREE.CanvasTexture(canvas)
+        this.scene.background = texture
+        this.scene.fog = new THREE.Fog(0x1a1a2e, 15, 50)
     }
 
     /**
-     * Create and configure the camera
+     * Create camera with better positioning
      */
     createCamera() {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-        this.camera.position.set(0, 2, 8)
+        this.camera.position.set(0, 3, 10)
+        this.camera.lookAt(0, 2, 0)
     }
 
     /**
-     * Create and configure the renderer
+     * Create renderer with enhanced settings
      */
     createRenderer() {
         this.renderer = new THREE.WebGLRenderer({
             antialias: true,
             alpha: true,
+            powerPreference: "high-performance",
         })
         this.renderer.setSize(window.innerWidth, window.innerHeight)
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
         this.renderer.shadowMap.enabled = true
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
         this.renderer.outputColorSpace = THREE.SRGBColorSpace
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+        this.renderer.toneMappingExposure = 1.2
 
         const container = document.getElementById("canvas-container")
         if (container) {
@@ -100,29 +119,31 @@ class PendulumWaveSimulation {
     }
 
     /**
-     * Create orbit controls for camera navigation
+     * Create enhanced camera controls
      */
     createControls() {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement)
         this.controls.enableDamping = true
         this.controls.dampingFactor = 0.05
         this.controls.screenSpacePanning = false
-        this.controls.minDistance = 3
+        this.controls.minDistance = 4
         this.controls.maxDistance = 20
-        this.controls.maxPolarAngle = Math.PI / 2
+        this.controls.maxPolarAngle = Math.PI / 1.8
+        this.controls.autoRotate = false
+        this.controls.autoRotateSpeed = 0.5
     }
 
     /**
-     * Setup scene lighting
+     * Setup enhanced lighting system
      */
     setupLighting() {
-        // Ambient light for overall illumination
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.4)
+        // Ambient light
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.3)
         this.scene.add(ambientLight)
 
-        // Main directional light (sun)
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-        directionalLight.position.set(5, 10, 5)
+        // Main directional light with better shadows
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0)
+        directionalLight.position.set(8, 12, 5)
         directionalLight.castShadow = true
         directionalLight.shadow.mapSize.width = 2048
         directionalLight.shadow.mapSize.height = 2048
@@ -132,17 +153,21 @@ class PendulumWaveSimulation {
         directionalLight.shadow.camera.right = 10
         directionalLight.shadow.camera.top = 10
         directionalLight.shadow.camera.bottom = -10
+        directionalLight.shadow.bias = -0.0001
         this.scene.add(directionalLight)
 
-        // Point light for pendulum area
-        const pointLight = new THREE.PointLight(0xffffff, 0.6, 20)
-        pointLight.position.set(0, 6, 2)
-        pointLight.castShadow = true
-        this.scene.add(pointLight)
+        // Colored point lights for atmosphere
+        const pointLight1 = new THREE.PointLight(0x4fc3f7, 0.8, 25)
+        pointLight1.position.set(-5, 8, 3)
+        this.scene.add(pointLight1)
+
+        const pointLight2 = new THREE.PointLight(0xff6b6b, 0.6, 20)
+        pointLight2.position.set(5, 6, -2)
+        this.scene.add(pointLight2)
 
         // Spot light for wave surface
-        const spotLight = new THREE.SpotLight(0x00ffff, 0.5, 30, Math.PI / 6)
-        spotLight.position.set(-5, 8, 0)
+        const spotLight = new THREE.SpotLight(0x00ffff, 0.7, 30, Math.PI / 8)
+        spotLight.position.set(-5, 10, 0)
         spotLight.target.position.set(-5, -2, 0)
         spotLight.castShadow = true
         this.scene.add(spotLight)
@@ -150,30 +175,30 @@ class PendulumWaveSimulation {
     }
 
     /**
-     * Create pendulum objects
+     * Create pendulums with enhanced configurations
      */
     createPendulums() {
-        const pendulumConfigs = [
-            { x: -2, y: 4, z: 0, length: 3, mass: 1, color: 0xff4444 },
+        const configs = [
+            { x: -2.5, y: 4, z: 0, length: 3, mass: 1, color: 0xff4444 },
             { x: 0, y: 4, z: 0, length: 2.5, mass: 1.5, color: 0x44ff44 },
-            { x: 2, y: 4, z: 0, length: 2, mass: 2, color: 0x4444ff },
+            { x: 2.5, y: 4, z: 0, length: 2, mass: 2, color: 0x4444ff },
         ]
 
-        pendulumConfigs.forEach((config) => {
+        configs.forEach((config) => {
             const pendulum = new Pendulum(this.scene, config)
             this.pendulums.push(pendulum)
         })
     }
 
     /**
-     * Create wave simulation
+     * Create enhanced wave simulation
      */
-    createWaveSimulation() {
+    createWave() {
         this.waveSimulation = new WaveSimulation(this.scene, {
-            width: 10,
-            height: 6,
-            segments: 64,
-            position: { x: -5, y: -2, z: 0 },
+            width: 12,
+            height: 8,
+            segments: 40,
+            position: { x: -6, y: -2, z: 0 },
             amplitude: 0.5,
             frequency: 1.0,
             speed: 1.0,
@@ -181,54 +206,52 @@ class PendulumWaveSimulation {
     }
 
     /**
-     * Setup event listeners for user interaction
+     * Create effects system
+     */
+    createEffects() {
+        this.effects = new EffectsSystem(this.scene)
+        this.pendulums.forEach((pendulum) => {
+            this.effects.addTrail(pendulum)
+        })
+    }
+
+    /**
+     * Setup event listeners
      */
     setupEventListeners() {
-        // Mouse events for pendulum interaction
+        // Mouse events
         this.renderer.domElement.addEventListener("mousedown", this.onMouseDown.bind(this))
         this.renderer.domElement.addEventListener("mousemove", this.onMouseMove.bind(this))
         this.renderer.domElement.addEventListener("mouseup", this.onMouseUp.bind(this))
 
-        // Touch events for mobile support
+        // Touch events for mobile
         this.renderer.domElement.addEventListener("touchstart", this.onTouchStart.bind(this))
         this.renderer.domElement.addEventListener("touchmove", this.onTouchMove.bind(this))
         this.renderer.domElement.addEventListener("touchend", this.onTouchEnd.bind(this))
 
-        // Window resize
+        // Window events
         window.addEventListener("resize", this.onWindowResize.bind(this))
-
-        // Keyboard shortcuts
         window.addEventListener("keydown", this.onKeyDown.bind(this))
 
-        // Prevent context menu on canvas
+        // Prevent context menu
         this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault())
     }
 
     /**
-     * Setup GUI controls
+     * Setup controls manager
      */
-    setupGUIControls() {
-        const simulationControls = {
-            isPlaying: this.isPlaying,
-            togglePause: () => {
-                this.isPlaying = !this.isPlaying
-            },
-        }
-
-        this.controlsManager = new ControlsManager(this.pendulums, this.waveSimulation, simulationControls)
+    setupControls() {
+        this.controlsManager = new ControlsManager(this.pendulums, this.waveSimulation, this.effects)
     }
 
     /**
-     * Handle mouse down events
+     * Mouse interaction handlers
      */
     onMouseDown(event) {
         this.updateMousePosition(event.clientX, event.clientY)
         this.checkPendulumInteraction()
     }
 
-    /**
-     * Handle mouse move events
-     */
     onMouseMove(event) {
         if (this.isDragging && this.draggedPendulum) {
             this.updateMousePosition(event.clientX, event.clientY)
@@ -236,17 +259,18 @@ class PendulumWaveSimulation {
         }
     }
 
-    /**
-     * Handle mouse up events
-     */
     onMouseUp() {
+        if (this.isDragging && this.draggedPendulum) {
+            // Create release effect
+            this.effects.createExplosion(this.draggedPendulum.getBob().position, this.draggedPendulum.color)
+        }
         this.isDragging = false
         this.draggedPendulum = null
         this.controls.enabled = true
     }
 
     /**
-     * Handle touch start events
+     * Touch event handlers
      */
     onTouchStart(event) {
         if (event.touches.length === 1) {
@@ -256,9 +280,6 @@ class PendulumWaveSimulation {
         }
     }
 
-    /**
-     * Handle touch move events
-     */
     onTouchMove(event) {
         if (event.touches.length === 1 && this.isDragging && this.draggedPendulum) {
             event.preventDefault()
@@ -268,9 +289,6 @@ class PendulumWaveSimulation {
         }
     }
 
-    /**
-     * Handle touch end events
-     */
     onTouchEnd() {
         this.onMouseUp()
     }
@@ -288,7 +306,6 @@ class PendulumWaveSimulation {
      */
     checkPendulumInteraction() {
         this.raycaster.setFromCamera(this.mouse, this.camera)
-
         const bobs = this.pendulums.map((p) => p.getBob())
         const intersects = this.raycaster.intersectObjects(bobs)
 
@@ -296,6 +313,9 @@ class PendulumWaveSimulation {
             this.isDragging = true
             this.draggedPendulum = intersects[0].object.userData.pendulum
             this.controls.enabled = false
+
+            // Visual feedback for grab
+            this.effects.createExplosion(this.draggedPendulum.getBob().position, 0xffffff)
         }
     }
 
@@ -304,8 +324,6 @@ class PendulumWaveSimulation {
      */
     updateDraggedPendulum() {
         this.raycaster.setFromCamera(this.mouse, this.camera)
-
-        // Project mouse position to world coordinates
         const distance = this.camera.position.distanceTo(
             new THREE.Vector3(this.draggedPendulum.pivotX, this.draggedPendulum.pivotY, this.draggedPendulum.pivotZ),
         )
@@ -334,44 +352,52 @@ class PendulumWaveSimulation {
         switch (event.code) {
             case "Space":
                 event.preventDefault()
-                this.isPlaying = !this.isPlaying
-                const pauseButton = document.getElementById("pausePlay")
-                if (pauseButton) {
-                    pauseButton.textContent = this.isPlaying ? "Pause" : "Play"
-                }
+                this.togglePause()
                 break
             case "KeyR":
                 event.preventDefault()
-                this.pendulums.forEach((pendulum) => pendulum.reset())
+                this.pendulums.forEach((p, i) => {
+                    setTimeout(() => p.reset(), i * 200)
+                })
                 break
-            case "KeyF":
+            case "KeyT":
                 event.preventDefault()
-                this.toggleFullscreen()
+                this.effects.toggleTrails()
+                break
+            case "KeyC":
+                event.preventDefault()
+                this.effects.clearTrails()
+                break
+            case "KeyA":
+                event.preventDefault()
+                this.controls.autoRotate = !this.controls.autoRotate
                 break
         }
     }
 
     /**
-     * Toggle fullscreen mode
+     * Toggle pause with smooth transition
      */
-    toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen()
-        } else {
-            document.exitFullscreen()
+    togglePause() {
+        this.isPlaying = !this.isPlaying
+        const button = document.getElementById("pausePlay")
+        if (button) {
+            button.textContent = this.isPlaying ? "Pause" : "Play"
+            button.style.background = this.isPlaying ?
+                "linear-gradient(45deg, #ff6b6b, #ee5a52)" :
+                "linear-gradient(45deg, #4caf50, #45a049)"
         }
     }
 
     /**
-     * Hide loading screen
+     * Hide loading screen with animation
      */
     hideLoadingScreen() {
         const loading = document.getElementById("loading")
         if (loading) {
             loading.style.opacity = "0"
-            setTimeout(() => {
-                loading.style.display = "none"
-            }, 500)
+            loading.style.transform = "scale(0.9)"
+            setTimeout(() => (loading.style.display = "none"), 500)
         }
     }
 
@@ -383,32 +409,37 @@ class PendulumWaveSimulation {
         if (loading) {
             loading.innerHTML = `
         <div style="color: #ff6b6b; text-align: center;">
-          <h3>Error</h3>
+          <h3>⚠️ Error</h3>
           <p>${message}</p>
           <button onclick="location.reload()" style="
-            background: #4fc3f7;
+            background: linear-gradient(45deg, #4fc3f7, #29b6f6);
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 24px;
+            border-radius: 6px;
             cursor: pointer;
             margin-top: 20px;
-          ">Reload Page</button>
+            font-size: 16px;
+            transition: transform 0.2s ease;
+          " onmouseover="this.style.transform='scale(1.05)'" 
+             onmouseout="this.style.transform='scale(1)'">
+            🔄 Reload Page
+          </button>
         </div>
       `
         }
     }
 
     /**
-     * Main animation loop
+     * Main animation loop with enhanced performance
      */
     animate() {
         this.animationId = requestAnimationFrame(this.animate.bind(this))
 
         if (this.isPlaying) {
-            const deltaTime = this.clock.getDelta()
+            const deltaTime = Math.min(this.clock.getDelta(), 0.02) // Cap delta time
 
-            // Update pendulums (only if not being dragged)
+            // Update pendulums
             this.pendulums.forEach((pendulum) => {
                 if (!this.isDragging || this.draggedPendulum !== pendulum) {
                     pendulum.update(deltaTime)
@@ -417,9 +448,12 @@ class PendulumWaveSimulation {
 
             // Update wave simulation
             this.waveSimulation.update(deltaTime)
+
+            // Update effects
+            this.effects.update(deltaTime, this.pendulums)
         }
 
-        // Update controls
+        // Always update controls for smooth camera movement
         this.controls.update()
 
         // Render scene
@@ -430,31 +464,22 @@ class PendulumWaveSimulation {
      * Dispose of all resources
      */
     dispose() {
-        // Cancel animation
-        if (this.animationId) {
-            cancelAnimationFrame(this.animationId)
-        }
+        if (this.animationId) cancelAnimationFrame(this.animationId)
 
-        // Dispose pendulums
-        this.pendulums.forEach((pendulum) => pendulum.dispose())
-
-        // Dispose wave simulation
-        if (this.waveSimulation) {
-            this.waveSimulation.dispose()
-        }
-
-        // Dispose renderer
+        this.pendulums.forEach((p) => p.dispose())
+        this.waveSimulation.dispose()
+        this.effects.dispose()
         this.renderer.dispose()
 
         // Remove event listeners
         window.removeEventListener("resize", this.onWindowResize)
         window.removeEventListener("keydown", this.onKeyDown)
 
-        console.log("Simulation disposed")
+        console.log("Simulation disposed successfully")
     }
 }
 
-// Initialize the simulation when the DOM is loaded
+// Initialize simulation when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
     window.simulation = new PendulumWaveSimulation()
 })

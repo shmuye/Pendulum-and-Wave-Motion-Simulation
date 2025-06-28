@@ -1,8 +1,4 @@
 import * as THREE from "three"
-
-/**
- * Pendulum class - represents a single pendulum with realistic physics
- */
 export class Pendulum {
     constructor(scene, config) {
         this.scene = scene
@@ -13,144 +9,153 @@ export class Pendulum {
         this.mass = config.mass
         this.color = config.color
 
-        // Physics properties
-        this.angle = Math.PI / 6 // Initial angle (30 degrees)
+        this.angle = Math.PI / 6
         this.angularVelocity = 0
         this.gravity = 9.81
         this.damping = 0.999
 
-        // 3D objects
+        this.time = 0
+        this.glowIntensity = 0
+
         this.group = new THREE.Group()
         this.pivot = null
         this.rod = null
         this.bob = null
+        this.glowSphere = null
 
         this.createComponents()
         this.scene.add(this.group)
     }
 
-    /**
-     * Create the 3D components of the pendulum
-     */
-    createComponents() {
-        // Clear existing components
-        this.clearComponents()
 
-        // Create pivot point (small metallic sphere)
+    createComponents() {
+        // Pivot point
         const pivotGeometry = new THREE.SphereGeometry(0.05, 16, 16)
         const pivotMaterial = new THREE.MeshPhongMaterial({
             color: 0x333333,
             shininess: 100,
-            specular: 0x111111,
         })
         this.pivot = new THREE.Mesh(pivotGeometry, pivotMaterial)
         this.pivot.position.set(this.pivotX, this.pivotY, this.pivotZ)
         this.pivot.castShadow = true
         this.group.add(this.pivot)
 
-        // Create rod (wooden cylinder)
+        // Rod with metallic look
         const rodGeometry = new THREE.CylinderGeometry(0.02, 0.02, this.length, 8)
         const rodMaterial = new THREE.MeshPhongMaterial({
             color: 0x8b4513,
-            shininess: 30,
-            specular: 0x222222,
+            shininess: 50,
+            specular: 0x444444,
         })
         this.rod = new THREE.Mesh(rodGeometry, rodMaterial)
         this.rod.castShadow = true
         this.group.add(this.rod)
 
-        // Create bob (metallic sphere with size based on mass)
+        // Bob with enhanced materials
         const bobRadius = 0.1 + (this.mass - 0.5) * 0.05
         const bobGeometry = new THREE.SphereGeometry(bobRadius, 32, 32)
         const bobMaterial = new THREE.MeshPhongMaterial({
             color: this.color,
             shininess: 100,
             specular: 0x444444,
-            reflectivity: 0.3,
+            emissive: new THREE.Color(this.color).multiplyScalar(0.1),
         })
         this.bob = new THREE.Mesh(bobGeometry, bobMaterial)
         this.bob.userData = { pendulum: this }
         this.bob.castShadow = true
         this.group.add(this.bob)
 
+        // Glow sphere for energy visualization
+        const glowGeometry = new THREE.SphereGeometry(bobRadius * 1.5, 16, 16)
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: this.color,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+        })
+        this.glowSphere = new THREE.Mesh(glowGeometry, glowMaterial)
+        this.bob.add(this.glowSphere)
+
         this.updatePosition()
     }
 
     /**
-     * Clear existing components
-     */
-    clearComponents() {
-        while (this.group.children.length > 0) {
-            const child = this.group.children[0]
-            this.group.remove(child)
-            if (child.geometry) child.geometry.dispose()
-            if (child.material) child.material.dispose()
-        }
-    }
-
-    /**
-     * Update the position of pendulum components based on current angle
+     * Update position with smooth animations
      */
     updatePosition() {
         const bobX = this.pivotX + Math.sin(this.angle) * this.length
         const bobY = this.pivotY - Math.cos(this.angle) * this.length
 
-        // Update bob position
+        // Smooth bob movement
         this.bob.position.set(bobX, bobY, this.pivotZ)
 
-        // Update rod position and rotation
+        // Rod positioning and rotation
         this.rod.position.set(
             this.pivotX + (Math.sin(this.angle) * this.length) / 2,
             this.pivotY - (Math.cos(this.angle) * this.length) / 2,
             this.pivotZ,
         )
         this.rod.rotation.z = this.angle
+
+        // Add subtle bob rotation
+        this.bob.rotation.y += 0.01
     }
 
     /**
-     * Update pendulum physics
-     * @param {number} deltaTime - Time elapsed since last update
+     * Update physics with enhanced animations
      */
     update(deltaTime) {
-        // Simple pendulum physics: θ'' = -(g/L) * sin(θ)
-        const angularAcceleration = -(this.gravity / this.length) * Math.sin(this.angle)
+        this.time += deltaTime
 
+        // Physics calculation
+        const angularAcceleration = -(this.gravity / this.length) * Math.sin(this.angle)
         this.angularVelocity += angularAcceleration * deltaTime
-        this.angularVelocity *= this.damping // Apply damping
+        this.angularVelocity *= this.damping
         this.angle += this.angularVelocity * deltaTime
+
+        // Update glow based on velocity
+        const velocity = Math.abs(this.angularVelocity)
+        this.glowIntensity = velocity * 0.3
+
+        // Animate emissive color
+        const emissiveIntensity = 0.1 + this.glowIntensity * 0.2
+        this.bob.material.emissive.copy(new THREE.Color(this.color)).multiplyScalar(emissiveIntensity)
+
+        // Update glow sphere
+        this.glowSphere.material.opacity = this.glowIntensity * 0.3
+        this.glowSphere.scale.setScalar(1 + Math.sin(this.time * 5) * 0.1)
+
+        // Add subtle bob pulsing
+        const pulseScale = 1 + Math.sin(this.time * 3) * 0.05
+        this.bob.scale.setScalar(pulseScale)
 
         this.updatePosition()
     }
 
     /**
-     * Set pendulum angle based on world position (for dragging)
-     * @param {THREE.Vector3} worldPosition - World position to set angle from
+     * Set angle from world position (for dragging)
      */
     setAngleFromPosition(worldPosition) {
         const dx = worldPosition.x - this.pivotX
         const dy = worldPosition.y - this.pivotY
-        const distance = Math.sqrt(dx * dx + dy * dy)
-
-        // Constrain to pendulum length and set angle
-        if (distance > 0) {
+        if (Math.sqrt(dx * dx + dy * dy) > 0) {
             this.angle = Math.atan2(dx, -dy)
-            this.angularVelocity = 0 // Reset velocity when dragging
+            this.angularVelocity = 0
         }
     }
 
     /**
-     * Reset pendulum to initial state
+     * Reset with animation
      */
     reset() {
         this.angle = Math.PI / 6
         this.angularVelocity = 0
+        this.glowIntensity = 0
         this.updatePosition()
     }
 
     /**
-     * Update pendulum properties and recreate components
-     * @param {number} length - New length
-     * @param {number} mass - New mass
+     * Update properties with smooth transition
      */
     updateProperties(length, mass) {
         this.length = length
@@ -159,30 +164,29 @@ export class Pendulum {
     }
 
     /**
-     * Get the bob mesh for raycasting
-     * @returns {THREE.Mesh} The bob mesh
+     * Get bob for interaction
      */
     getBob() {
         return this.bob
     }
 
     /**
-     * Get pendulum energy (kinetic + potential)
-     * @returns {number} Total energy
+     * Get energy for visualization
      */
     getEnergy() {
         const height = this.pivotY - this.bob.position.y
         const velocity = this.angularVelocity * this.length
-        const kineticEnergy = 0.5 * this.mass * velocity * velocity
-        const potentialEnergy = this.mass * this.gravity * height
-        return kineticEnergy + potentialEnergy
+        return 0.5 * this.mass * velocity * velocity + this.mass * this.gravity * height
     }
 
     /**
-     * Dispose of the pendulum and remove from scene
+     * Dispose resources
      */
     dispose() {
-        this.clearComponents()
         this.scene.remove(this.group)
+        this.group.traverse((child) => {
+            if (child.geometry) child.geometry.dispose()
+            if (child.material) child.material.dispose()
+        })
     }
 }
