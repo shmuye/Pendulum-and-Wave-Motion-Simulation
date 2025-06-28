@@ -83,3 +83,13 @@ The pendulum's motion is based on sine wave functions, and the wave simulation u
 ### 4,Solome Zewdu (UGR/4112/14)
 
 ### 5,Tinania Tigneh (UGR/8453/15)
+
+## 🖥️ Live Demo
+
+Check out the simulation in action:  
+[View Live Demo](https://shmuye.github.io/Pendulum-and-Wave-Motion-Simulation/)
+
+## 📸 Screenshots
+
+![Pendulum Simulation Screenshot](docs/screenshots/pendulum.png)
+![Wave Simulation Screenshot](docs/screenshots/wave.png)
