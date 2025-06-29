@@ -84,6 +84,9 @@ The pendulum's motion is based on sine wave functions, and the wave simulation u
 
 ### 5,Tinania Tigneh (UGR/8453/15)
 
+### 6,Yonathan Desalegn (UGR/4871/15)
+
+
 ## 🖥️ Live Demo
 
 Check out the simulation in action:  
