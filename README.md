@@ -89,7 +89,4 @@ The pendulum's motion is based on sine wave functions, and the wave simulation u
 Check out the simulation in action:  
 [View Live Demo](https://moonlit-macaron-59fafa.netlify.app/)
 
-## 📸 Screenshots
 
-![Pendulum Simulation Screenshot](docs/screenshots/pendulum.png)
-![Wave Simulation Screenshot](docs/screenshots/wave.png)
