@@ -87,7 +87,7 @@ The pendulum's motion is based on sine wave functions, and the wave simulation u
 ## 🖥️ Live Demo
 
 Check out the simulation in action:  
-[View Live Demo](https://shmuye.github.io/Pendulum-and-Wave-Motion-Simulation/)
+[View Live Demo](https://moonlit-macaron-59fafa.netlify.app/)
 
 ## 📸 Screenshots
 
