@@ -160,7 +160,25 @@ export class Pendulum {
     updateProperties(length, mass) {
         this.length = length
         this.mass = mass
-        this.createComponents()
+        
+        // Update rod geometry
+        const newRodGeometry = new THREE.CylinderGeometry(0.02, 0.02, this.length, 8)
+        this.rod.geometry.dispose()
+        this.rod.geometry = newRodGeometry
+        
+        // Update bob size and glow
+        const bobRadius = 0.1 + (this.mass - 0.5) * 0.05
+        const newBobGeometry = new THREE.SphereGeometry(bobRadius, 32, 32)
+        this.bob.geometry.dispose()
+        this.bob.geometry = newBobGeometry
+        
+        // Update glow sphere size
+        const newGlowGeometry = new THREE.SphereGeometry(bobRadius * 1.5, 16, 16)
+        this.glowSphere.geometry.dispose()
+        this.glowSphere.geometry = newGlowGeometry
+        
+        // Update position immediately
+        this.updatePosition()
     }
 
     /**

@@ -29,6 +29,9 @@ class PendulumWaveSimulation {
         this.draggedPendulum = null
         this.mouse = new THREE.Vector2()
         this.raycaster = new THREE.Raycaster()
+        
+        // Debug counter
+        this.clickCount = 0
 
         this.animationId = null
 
@@ -219,7 +222,7 @@ class PendulumWaveSimulation {
      * Setup event listeners
      */
     setupEventListeners() {
-        // Mouse events
+        // Mouse events on renderer's canvas
         this.renderer.domElement.addEventListener("mousedown", this.onMouseDown.bind(this))
         this.renderer.domElement.addEventListener("mousemove", this.onMouseMove.bind(this))
         this.renderer.domElement.addEventListener("mouseup", this.onMouseUp.bind(this))
@@ -235,6 +238,8 @@ class PendulumWaveSimulation {
 
         // Prevent context menu
         this.renderer.domElement.addEventListener("contextmenu", (e) => e.preventDefault())
+
+        console.log("✅ Event listeners set up (restored original)")
     }
 
     /**
@@ -245,28 +250,145 @@ class PendulumWaveSimulation {
     }
 
     /**
-     * Mouse interaction handlers
+     * Mouse interaction handlers - SIMPLIFIED VERSION
      */
     onMouseDown(event) {
         this.updateMousePosition(event.clientX, event.clientY)
         this.checkPendulumInteraction()
+        if (this.isDragging) {
+            document.body.style.cursor = 'grabbing'
+        }
     }
 
     onMouseMove(event) {
         if (this.isDragging && this.draggedPendulum) {
             this.updateMousePosition(event.clientX, event.clientY)
             this.updateDraggedPendulum()
+        } else {
+            this.updateMousePosition(event.clientX, event.clientY)
+            this.checkBobHover()
         }
     }
 
     onMouseUp() {
         if (this.isDragging && this.draggedPendulum) {
-            // Create release effect
             this.effects.createExplosion(this.draggedPendulum.getBob().position, this.draggedPendulum.color)
         }
         this.isDragging = false
         this.draggedPendulum = null
         this.controls.enabled = true
+        document.body.style.cursor = 'default'
+    }
+
+    /**
+     * Simple pendulum finding using screen coordinates
+     */
+    findClickedPendulum(mouseX, mouseY) {
+        // Convert screen coordinates to normalized device coordinates
+        const ndcX = (mouseX / this.renderer.domElement.width) * 2 - 1
+        const ndcY = -(mouseY / this.renderer.domElement.height) * 2 + 1
+        
+        console.log("NDC coordinates:", ndcX, ndcY)
+        
+        // Create a ray from the camera
+        const raycaster = new THREE.Raycaster()
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera)
+        
+        // Check intersection with all pendulum bobs
+        for (const pendulum of this.pendulums) {
+            const bob = pendulum.getBob()
+            const bobScreenPos = this.worldToScreen(bob.position)
+            
+            // Calculate distance in screen space
+            const distance = Math.sqrt(
+                Math.pow(mouseX - bobScreenPos.x, 2) + 
+                Math.pow(mouseY - bobScreenPos.y, 2)
+            )
+            
+            console.log(`Pendulum bob screen pos: ${bobScreenPos.x}, ${bobScreenPos.y}, distance: ${distance}`)
+            
+            // If click is within 50 pixels of bob center
+            if (distance < 50) {
+                console.log('🎯 Found pendulum to drag!')
+                this.isDragging = true
+                this.draggedPendulum = pendulum
+                this.controls.enabled = false
+                this.effects.createExplosion(bob.position, 0xffffff)
+                return
+            }
+        }
+        
+        console.log('❌ No pendulum found near click')
+    }
+
+    /**
+     * Simple hover detection
+     */
+    checkHoverSimple(mouseX, mouseY) {
+        // Reset all bob scales
+        this.pendulums.forEach(pendulum => {
+            pendulum.bob.scale.setScalar(1)
+        })
+        
+        // Check each pendulum
+        for (const pendulum of this.pendulums) {
+            const bob = pendulum.getBob()
+            const bobScreenPos = this.worldToScreen(bob.position)
+            
+            // Calculate distance in screen space
+            const distance = Math.sqrt(
+                Math.pow(mouseX - bobScreenPos.x, 2) + 
+                Math.pow(mouseY - bobScreenPos.y, 2)
+            )
+            
+            // If mouse is within 30 pixels of bob center
+            if (distance < 30) {
+                pendulum.bob.scale.setScalar(1.2)
+                document.body.style.cursor = 'grab'
+                return
+            }
+        }
+        
+        document.body.style.cursor = 'default'
+    }
+
+    /**
+     * Convert world position to screen coordinates
+     */
+    worldToScreen(worldPos) {
+        const vector = worldPos.clone()
+        vector.project(this.camera)
+        
+        return {
+            x: (vector.x * 0.5 + 0.5) * this.renderer.domElement.width,
+            y: (vector.y * -0.5 + 0.5) * this.renderer.domElement.height
+        }
+    }
+
+    /**
+     * Simple dragging update
+     */
+    updateDraggedPendulumSimple(mouseX, mouseY) {
+        if (!this.draggedPendulum) return
+        
+        // Convert screen coordinates to world position
+        const ndcX = (mouseX / this.renderer.domElement.width) * 2 - 1
+        const ndcY = -(mouseY / this.renderer.domElement.height) * 2 + 1
+        
+        const raycaster = new THREE.Raycaster()
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.camera)
+        
+        // Get a point at a fixed distance from camera
+        const distance = this.camera.position.distanceTo(
+            new THREE.Vector3(this.draggedPendulum.pivotX, this.draggedPendulum.pivotY, this.draggedPendulum.pivotZ)
+        )
+        
+        const worldPosition = new THREE.Vector3()
+        worldPosition.copy(raycaster.ray.direction)
+        worldPosition.multiplyScalar(distance)
+        worldPosition.add(raycaster.ray.origin)
+        
+        this.draggedPendulum.setAngleFromPosition(worldPosition)
     }
 
     /**
@@ -297,8 +419,9 @@ class PendulumWaveSimulation {
      * Update mouse position for raycasting
      */
     updateMousePosition(clientX, clientY) {
-        this.mouse.x = (clientX / window.innerWidth) * 2 - 1
-        this.mouse.y = -(clientY / window.innerHeight) * 2 + 1
+        const rect = this.renderer.domElement.getBoundingClientRect()
+        this.mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1
+        this.mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1
     }
 
     /**
@@ -308,13 +431,10 @@ class PendulumWaveSimulation {
         this.raycaster.setFromCamera(this.mouse, this.camera)
         const bobs = this.pendulums.map((p) => p.getBob())
         const intersects = this.raycaster.intersectObjects(bobs)
-
         if (intersects.length > 0) {
             this.isDragging = true
             this.draggedPendulum = intersects[0].object.userData.pendulum
             this.controls.enabled = false
-
-            // Visual feedback for grab
             this.effects.createExplosion(this.draggedPendulum.getBob().position, 0xffffff)
         }
     }
@@ -325,7 +445,7 @@ class PendulumWaveSimulation {
     updateDraggedPendulum() {
         this.raycaster.setFromCamera(this.mouse, this.camera)
         const distance = this.camera.position.distanceTo(
-            new THREE.Vector3(this.draggedPendulum.pivotX, this.draggedPendulum.pivotY, this.draggedPendulum.pivotZ),
+            new THREE.Vector3(this.draggedPendulum.pivotX, this.draggedPendulum.pivotY, this.draggedPendulum.pivotZ)
         )
 
         const worldPosition = new THREE.Vector3()
@@ -476,6 +596,19 @@ class PendulumWaveSimulation {
         window.removeEventListener("keydown", this.onKeyDown)
 
         console.log("Simulation disposed successfully")
+    }
+
+    checkBobHover() {
+        this.raycaster.setFromCamera(this.mouse, this.camera)
+        const bobs = this.pendulums.map((p) => p.getBob())
+        const intersects = this.raycaster.intersectObjects(bobs)
+        bobs.forEach(bob => bob.scale.setScalar(1))
+        if (intersects.length > 0) {
+            intersects[0].object.scale.setScalar(1.2)
+            document.body.style.cursor = 'grab'
+        } else {
+            document.body.style.cursor = 'default'
+        }
     }
 }
 
